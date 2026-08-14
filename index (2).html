@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Monitoring WO per Mitra</title>
+<style>
+  :root{
+    --bg:#0b1220;
+    --panel:#121b2e;
+    --panel-2:#0f1729;
+    --line:#223049;
+    --text:#e7edf7;
+    --muted:#8493ac;
+    --accent:#38bdf8;
+    --open:#f5a524;
+    --good:#34d399;
+    --bad:#f87171;
+    --bar-track:#1a2437;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1200px 500px at 10% -10%, #16233d 0%, transparent 60%),
+      radial-gradient(900px 500px at 100% 0%, #10203a 0%, transparent 55%),
+      var(--bg);
+    color:var(--text);
+    font-family: 'Segoe UI', Roboto, -apple-system, BlinkMacSystemFont, sans-serif;
+    min-height:100vh;
+    padding: 28px 16px 60px;
+  }
+  .wrap{ max-width: 980px; margin: 0 auto; }
+  .topbar{
+    display:flex; align-items:flex-end; justify-content:space-between;
+    flex-wrap:wrap; gap:12px; margin-bottom: 20px;
+  }
+  .eyebrow{
+    font-size:12px; letter-spacing:3px; color:var(--accent);
+    text-transform:uppercase; font-weight:700; margin:0 0 6px;
+  }
+  h1{ margin:0; font-size: 22px; font-weight:700; }
+  .meta{ font-size:12px; color:var(--muted); text-align:right; }
+  .meta span{ display:block; }
+  #refreshBtn{
+    margin-top:6px; background:var(--panel-2); color:var(--accent);
+    border:1px solid var(--line); padding:6px 12px; border-radius:8px;
+    font-size:12px; cursor:pointer;
+  }
+  #refreshBtn:hover{ border-color:var(--accent); }
+
+  .kpis{ display:grid; grid-template-columns: repeat(3,1fr); gap:12px; margin-bottom: 20px; }
+  .kpi{
+    background: linear-gradient(180deg, var(--panel), var(--panel-2));
+    border:1px solid var(--line); border-radius:14px; padding:16px 18px;
+  }
+  .kpi .label{ font-size:11px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; }
+  .kpi .value{ font-size:26px; font-weight:700; margin-top:6px; }
+  .kpi.open .value{ color:var(--open); }
+  .kpi.top .value{ color:var(--good); font-size:18px; }
+  .kpi.bottom .value{ color:var(--bad); font-size:18px; }
+
+  .panel{
+    background: var(--panel);
+    border:1px solid var(--line);
+    border-radius:16px;
+    overflow:hidden;
+  }
+  .panel-head{
+    padding:16px 20px; border-bottom:1px solid var(--line);
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .panel-head h2{ margin:0; font-size:14px; letter-spacing:1px; color:var(--muted); text-transform:uppercase; font-weight:700;}
+  .col-headers{
+    display:grid; grid-template-columns: 34px 1.6fr 0.9fr 0.9fr;
+    padding: 10px 20px; font-size:11px; color:var(--muted);
+    text-transform:uppercase; letter-spacing:1px; border-bottom:1px solid var(--line);
+  }
+  .col-headers .r{ text-align:right; }
+  .row{
+    display:grid; grid-template-columns: 34px 1.6fr 0.9fr 0.9fr;
+    align-items:center;
+    padding: 12px 20px;
+    border-bottom:1px solid var(--line);
+    position:relative;
+  }
+  .row:last-child{ border-bottom:none; }
+  .rank{ color:var(--muted); font-weight:700; font-size:13px; }
+  .rank.top{ color:var(--good); }
+  .rank.bottom{ color:var(--bad); }
+  .name{ font-weight:600; font-size:14px; position:relative; z-index:1; }
+  .bar-bg{
+    position:absolute; left:0; top:0; bottom:0;
+    background: linear-gradient(90deg, rgba(56,189,248,0.14), rgba(56,189,248,0));
+    z-index:0;
+  }
+  .wo{ text-align:right; font-weight:700; color:var(--open); font-size:15px; z-index:1; }
+  .sla{ text-align:right; color:var(--text); font-size:14px; z-index:1; }
+  .sla.empty{ color:var(--muted); font-style:italic; font-size:12px; }
+
+  .footnote{ margin-top:14px; font-size:11px; color:var(--muted); line-height:1.6; }
+  .state{ padding: 40px 20px; text-align:center; color:var(--muted); font-size:13px; }
+  .state.error{ color:var(--bad); }
+
+  @media (max-width: 560px){
+    .kpis{ grid-template-columns:1fr; }
+    .col-headers, .row{ grid-template-columns: 26px 1.4fr 0.8fr 0.8fr; padding-left:14px; padding-right:14px; }
+    h1{ font-size:18px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <div>
+      <p class="eyebrow">Monitoring WO</p>
+      <h1>WO Open &amp; SLA per Mitra</h1>
+    </div>
+    <div class="meta">
+      <span id="lastUpdate">Memuat data…</span>
+      <button id="refreshBtn">Refresh sekarang</button>
+    </div>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi open">
+      <div class="label">Total WO Open</div>
+      <div class="value" id="kpiTotalOpen">–</div>
+    </div>
+    <div class="kpi top">
+      <div class="label">Mitra WO Terbanyak</div>
+      <div class="value" id="kpiTop">–</div>
+    </div>
+    <div class="kpi bottom">
+      <div class="label">Mitra WO Tersedikit</div>
+      <div class="value" id="kpiBottom">–</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <h2>Ranking Mitra</h2>
+    </div>
+    <div class="col-headers">
+      <div>#</div>
+      <div>Nama Mitra</div>
+      <div class="r">WO Open</div>
+      <div class="r">Rata² Usia WO</div>
+    </div>
+    <div id="tableBody">
+      <div class="state">Memuat data dari spreadsheet…</div>
+    </div>
+  </div>
+
+  <p class="footnote">
+    Sumber data: Google Spreadsheet (auto-fetch CSV, sheet LogWorkOrder6). Diurutkan dari WO Open terbanyak ke tersedikit.
+    WO dianggap "Open" jika Status Category (kolom I) berisi: Di Rescheduled, Sedang Dikerjakan, Sudah Assign, atau Sudah Distribusi.
+    "Rata² Usia WO" dihitung real-time: selisih waktu sekarang dengan WO Terbit (kolom B), selama WO tersebut belum pindah ke status Selesai — jadi angka ini akan terus bertambah otomatis setiap kali halaman dibuka/refresh.
+  </p>
+</div>
+
+<script>
+const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR2jBfzspPE7Rd8ICB5O9MnRKlWbBA03zMW0EP50ZZE1QBKkOqyEPPalrdBtUK6A2RQAbhjICwzEE9i/pub?gid=452104004&single=true&output=csv";
+
+function parseCSV(text){
+  // simple RFC4180-ish CSV parser (handles quoted fields with commas/newlines)
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for (let i = 0; i < text.length; i++){
+    const c = text[i], n = text[i+1];
+    if (inQuotes){
+      if (c === '"' && n === '"'){ field += '"'; i++; }
+      else if (c === '"'){ inQuotes = false; }
+      else { field += c; }
+    } else {
+      if (c === '"'){ inQuotes = true; }
+      else if (c === ','){ row.push(field); field = ''; }
+      else if (c === '\r'){ /* skip */ }
+      else if (c === '\n'){ row.push(field); rows.push(row); row = []; field = ''; }
+      else { field += c; }
+    }
+  }
+  if (field.length || row.length){ row.push(field); rows.push(row); }
+  return rows.filter(r => r.some(f => f.trim() !== ''));
+}
+
+function letterToIndex(letter){
+  return letter.toUpperCase().charCodeAt(0) - 65; // A=0, B=1 ... T=19
+}
+
+// Kolom tetap sesuai struktur sheet LogWorkOrder6
+const COL_CREATED = letterToIndex('B'); // Work Order Created At
+const COL_STATUS  = letterToIndex('I'); // Status Category
+const COL_MITRA   = letterToIndex('T'); // Nama Mitra
+
+// Status Category yang dianggap "WO Open"
+const OPEN_STATUS_KEYWORDS = [
+  'rescheduled',
+  'sedang dikerjakan',
+  'sudah assign',
+  'sudah distribusi'
+];
+
+function isOpenStatus(status){
+  const s = (status || '').toLowerCase();
+  return OPEN_STATUS_KEYWORDS.some(kw => s.includes(kw));
+}
+
+function parseSheetDate(str){
+  if (!str) return null;
+  const d = new Date(str.trim());
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function formatDuration(hours){
+  if (hours < 24) return hours.toFixed(1) + ' jam';
+  const days = Math.floor(hours / 24);
+  const remHours = Math.round(hours % 24);
+  return days + ' hari ' + remHours + ' jam';
+}
+
+async function loadDashboard(){
+  const body = document.getElementById('tableBody');
+  body.innerHTML = '<div class="state">Memuat data dari spreadsheet…</div>';
+  try {
+    const res = await fetch(CSV_URL + '&_=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const text = await res.text();
+    const rows = parseCSV(text);
+    if (rows.length < 2) throw new Error('Data kosong');
+
+    const dataRows = rows.slice(1); // baris 1 = header
+    const now = new Date();
+
+    const stats = {};
+    for (const r of dataRows){
+      const mitra = (r[COL_MITRA] || '').trim();
+      const statusRaw = (r[COL_STATUS] || '').trim();
+      if (!mitra || !statusRaw) continue;
+      if (!isOpenStatus(statusRaw)) continue; // hanya hitung WO yang masih Open
+
+      if (!stats[mitra]) stats[mitra] = { open: 0, slaSum: 0, slaCount: 0 };
+      stats[mitra].open += 1;
+
+      const created = parseSheetDate(r[COL_CREATED]);
+      if (created){
+        const elapsedHours = (now - created) / (1000 * 60 * 60);
+        if (elapsedHours >= 0){
+          stats[mitra].slaSum += elapsedHours;
+          stats[mitra].slaCount += 1;
+        }
+      }
+    }
+
+    const list = Object.entries(stats)
+      .map(([mitra, s]) => ({
+        mitra,
+        open: s.open,
+        slaAvg: s.slaCount > 0 ? (s.slaSum / s.slaCount) : null
+      }))
+      .filter(x => x.open > 0)
+      .sort((a, b) => b.open - a.open);
+
+    if (list.length === 0){
+      body.innerHTML = '<div class="state">Tidak ada WO berstatus Open saat ini.</div>';
+      document.getElementById('kpiTotalOpen').textContent = '0';
+      document.getElementById('kpiTop').textContent = '–';
+      document.getElementById('kpiBottom').textContent = '–';
+      document.getElementById('lastUpdate').textContent = 'Update: ' + new Date().toLocaleString('id-ID');
+      return;
+    }
+
+    const totalOpen = list.reduce((a, x) => a + x.open, 0);
+    const maxOpen = list[0].open;
+
+    document.getElementById('kpiTotalOpen').textContent = totalOpen.toLocaleString('id-ID');
+    document.getElementById('kpiTop').textContent = list[0].mitra + ' (' + list[0].open + ')';
+    const last = list[list.length - 1];
+    document.getElementById('kpiBottom').textContent = last.mitra + ' (' + last.open + ')';
+
+    body.innerHTML = list.map((x, i) => {
+      const pct = maxOpen > 0 ? (x.open / maxOpen * 100) : 0;
+      const isTop = i === 0;
+      const isBottom = i === list.length - 1 && list.length > 1;
+      const rankClass = isTop ? 'top' : (isBottom ? 'bottom' : '');
+      const slaText = x.slaAvg !== null
+        ? formatDuration(x.slaAvg)
+        : '<span class="sla empty">n/a</span>';
+      return '<div class="row">' +
+        '<div class="bar-bg" style="width:' + pct + '%"></div>' +
+        '<div class="rank ' + rankClass + '">' + (i + 1) + '</div>' +
+        '<div class="name">' + x.mitra + '</div>' +
+        '<div class="wo">' + x.open + '</div>' +
+        '<div class="sla">' + slaText + '</div>' +
+        '</div>';
+    }).join('');
+
+    document.getElementById('lastUpdate').textContent = 'Update: ' + new Date().toLocaleString('id-ID');
+
+  } catch (err){
+    body.innerHTML = '<div class="state error">Gagal memuat data: ' + err.message + '</div>';
+    document.getElementById('lastUpdate').textContent = 'Gagal update — ' + new Date().toLocaleTimeString('id-ID');
+  }
+}
+
+document.getElementById('refreshBtn').addEventListener('click', loadDashboard);
+loadDashboard();
+setInterval(loadDashboard, 5 * 60 * 1000); // auto refresh tiap 5 menit
+</script>
+</body>
+</html>
