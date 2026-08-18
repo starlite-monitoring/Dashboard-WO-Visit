@@ -424,6 +424,28 @@ async function loadDashboard(){
 
 document.getElementById('refreshBtn').addEventListener('click', loadDashboard);
 
+function filterRankingList(q){
+  const cards = document.querySelectorAll('.mitra-card');
+  let visibleCount = 0;
+  cards.forEach(card => {
+    const match = !q || (card.getAttribute('data-name') || '').includes(q);
+    card.style.display = match ? '' : 'none';
+    if (match) visibleCount++;
+  });
+  const existingNoMatch = document.getElementById('noMatchState');
+  if (visibleCount === 0 && cards.length > 0){
+    if (!existingNoMatch){
+      const el = document.createElement('div');
+      el.id = 'noMatchState';
+      el.className = 'no-match';
+      el.textContent = 'Tidak ada mitra yang cocok dengan pencarian.';
+      document.getElementById('tableBody').appendChild(el);
+    }
+  } else if (existingNoMatch){
+    existingNoMatch.remove();
+  }
+}
+
 function updateHeroFromSearch(){
   const heroBox = document.getElementById('heroBox');
   const heroLabel = document.getElementById('heroLabel');
@@ -437,6 +459,7 @@ function updateHeroFromSearch(){
     heroLabel.textContent = 'Total WO Open All';
     totalEl.textContent = (window.__totalOpen || 0).toLocaleString('id-ID');
     subEl.textContent = list.length + ' mitra memiliki WO Open';
+    filterRankingList('');
     return;
   }
 
@@ -451,6 +474,7 @@ function updateHeroFromSearch(){
       heroLabel.textContent = partial.length + ' mitra cocok, pilih dari saran';
       totalEl.textContent = partial.reduce((a, x) => a + x.open, 0).toLocaleString('id-ID');
       subEl.textContent = partial.map(x => x.mitra).join(', ');
+      filterRankingList(q);
       return;
     }
   }
@@ -462,11 +486,13 @@ function updateHeroFromSearch(){
     totalEl.textContent = match.open.toLocaleString('id-ID');
     subEl.textContent = (match.overSla > 0 ? match.overSla + ' WO over SLA · ' : '') +
       (match.slaAvg !== null ? 'Rata² SLA ' + formatDuration(match.slaAvg) : 'Rata² SLA n/a');
+    filterRankingList(match.mitra.toLowerCase());
   } else {
     heroBox.classList.add('showing-mitra', 'not-found');
     heroLabel.textContent = 'Mitra tidak ditemukan';
     totalEl.textContent = '–';
     subEl.textContent = 'Coba kata kunci lain';
+    filterRankingList(q);
   }
 }
 
