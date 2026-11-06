@@ -1396,10 +1396,15 @@ function fuGroups(){
   const arr=Object.values(g); arr.forEach(m=>m.rows.sort((a,b)=>(a.stasiun||a.region||'').localeCompare(b.stasiun||b.region||'')||(b.umur||0)-(a.umur||0)||String(a.id).localeCompare(String(b.id))));
   return arr;
 }
+/* v19: link lampiran di pesan Follow Up. Ganti FU_LINK dengan link pendek (mis. s.id/xxxx) bila sudah dibuat; kosongkan '' untuk menghilangkan. */
+const FU_LINK='https://drive.google.com/file/d/1HLwu0dS08a_71cdEXynhqerJ7XXqlufg/view';
+const FU_LINK_LABEL='📎 *Lampiran:*';
+const FU_PENUTUP='Mohon dibantu percepatan kunjungan/visit dan Closed WO di aplikasi IKR. Terima kasih.';
+function fuTail(){ return (FU_LINK?`${FU_LINK_LABEL}\n${FU_LINK}\n\n`:'')+FU_PENUTUP; }
 function fuMsg(m){
   const rows=FU.detUrg?m.rows.filter(r=>r.sla==='OVER'):m.rows;
-  if(FU_IKR.test(m.name)&&rows.some(r=>r.ikrp)) return ikrMsg({title:'ESKALASI WO VISIT',name:m.name,short:'TBG',unit:'WO Visit',rows,urgent:m.urgent,tail:'Mohon dibantu percepatan kunjungan/visit dan Closed WO di aplikasi IKR. Terima kasih.'});
-  return `🚨 *ESKALASI WO VISIT* 🚨\n\n📋 *Ringkasan* :\n*${m.name}*\n- ${nf(m.rows.length)} WO Visit Open\n- Urgent (≥ SLA) : ${nf(m.urgent)}\n\n*Detail per ID pelanggan:*\n`+rows.map(r=>`- ${r.stasiun||r.region||'-'} - ${r.cust||r.id} - ${r.nama||'-'}`).join('\n')+`\n\nMohon dibantu percepatan kunjungan/visit dan Closed WO di aplikasi IKR. Terima kasih.`;
+  if(FU_IKR.test(m.name)&&rows.some(r=>r.ikrp)) return ikrMsg({title:'ESKALASI WO VISIT',name:m.name,short:'TBG',unit:'WO Visit',rows,urgent:m.urgent,tail:fuTail()});
+  return `🚨 *ESKALASI WO VISIT* 🚨\n\n📋 *Ringkasan* :\n*${m.name}*\n- ${nf(m.rows.length)} WO Visit Open\n- Urgent (≥ SLA) : ${nf(m.urgent)}\n\n*Detail per ID pelanggan:*\n`+rows.map(r=>`- ${r.stasiun||r.region||'-'} - ${r.cust||r.id} - ${r.nama||'-'}`).join('\n')+`\n\n`+fuTail();
 }
 function renderFollowUp(){
   const root=$('v-followup'), all=fuGroups(), q=FU.q.toLowerCase();
