@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Monitoring WO Open per Mitra</title>
+<link rel="preconnect" href="https://docs.google.com" crossorigin>
+<style>
+  :root{
+    --bg:#0a1120;
+    --panel:#111b30;
+    --panel-2:#0d1626;
+    --row-alt:#0f1a2e;
+    --line:#20304d;
+    --text:#e7edf7;
+    --muted:#8798b5;
+    --accent:#38bdf8;
+    --open:#f5a524;
+    --good:#34d399;
+    --chip-bg:#16233c;
+    --chip-border:#2a3c5c;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1200px 500px at 10% -10%, #142140 0%, transparent 60%),
+      radial-gradient(900px 500px at 100% 0%, #0f1e38 0%, transparent 55%),
+      var(--bg);
+    color:var(--text);
+    font-family: 'Segoe UI', Roboto, -apple-system, BlinkMacSystemFont, sans-serif;
+    min-height:100vh;
+    padding: 28px 16px 60px;
+  }
+  .wrap{ max-width: 1000px; margin: 0 auto; }
+
+  .topbar{
+    display:flex; align-items:flex-start; justify-content:space-between;
+    flex-wrap:wrap; gap:12px; margin-bottom: 22px;
+  }
+  .eyebrow{
+    font-size:12px; letter-spacing:3px; color:var(--accent);
+    text-transform:uppercase; font-weight:700; margin:0 0 6px;
+  }
+  h1{ margin:0; font-size: 20px; font-weight:700; }
+  .meta{ font-size:12px; color:var(--muted); text-align:right; }
+  #refreshBtn{
+    margin-top:6px; background:var(--panel-2); color:var(--accent);
+    border:1px solid var(--line); padding:6px 12px; border-radius:8px;
+    font-size:12px; cursor:pointer;
+  }
+  #refreshBtn:hover{ border-color:var(--accent); }
+  #refreshBtn:disabled{ opacity:.6; cursor:default; border-color:var(--line); }
+
+  .notice{ text-align:center; font-size:12px; color:var(--open); margin:-8px 0 14px; }
+  .notice[hidden]{ display:none; }
+
+  /* Search di atas hero */
+  .hero-search{ margin-bottom: 14px; }
+  .hero-search-box{
+    max-width: 420px; margin: 0 auto;
+    min-width: 0;
+  }
+  .hero.showing-mitra .value{ color: var(--accent); }
+  .hero.not-found .value{ color: var(--muted); font-size:22px; }
+  .hero-clear{
+    display:none; margin-top:10px; background:var(--panel-2); color:var(--muted);
+    border:1px solid var(--line); padding:5px 12px; border-radius:8px;
+    font-size:11px; cursor:pointer;
+  }
+  .hero.showing-mitra .hero-clear{ display:inline-block; }
+
+  /* HERO: Total WO Open All */
+  .hero{
+    text-align:center;
+    background: linear-gradient(180deg, var(--panel), var(--panel-2));
+    border:1px solid var(--line);
+    border-radius:20px;
+    padding: 36px 20px 32px;
+    margin-bottom: 22px;
+  }
+  .hero .label{
+    font-size:12px; letter-spacing:3px; color:var(--muted);
+    text-transform:uppercase; font-weight:700;
+  }
+  .hero .value{
+    font-size: 76px; font-weight:800; color:var(--open);
+    line-height:1.1; margin-top: 8px;
+  }
+  .hero .sub{ margin-top:10px; font-size:12px; color:var(--muted); }
+
+  .panel{
+    background: var(--panel);
+    border:1px solid var(--line);
+    border-radius:16px;
+    overflow:hidden;
+  }
+  .panel-head{
+    padding:16px 20px; border-bottom:1px solid var(--line);
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .panel-head h2{ margin:0; font-size:13px; letter-spacing:1px; color:var(--muted); text-transform:uppercase; font-weight:700;}
+  .search-box{
+    background: var(--panel-2); border:1px solid var(--line); border-radius:8px;
+    padding: 6px 12px; display:flex; align-items:center; gap:8px;
+    min-width: 220px;
+  }
+  .search-box svg{ flex-shrink:0; opacity:0.6; }
+  .search-box input{
+    background:none; border:none; outline:none; color:var(--text);
+    font-size:13px; width:100%;
+  }
+  .search-box input::placeholder{ color:var(--muted); }
+  .no-match{ padding: 30px 20px; text-align:center; color:var(--muted); font-size:13px; }
+
+  .col-headers{
+    display:grid; grid-template-columns: 34px 1.3fr 0.65fr 0.75fr 0.85fr 2fr;
+    padding: 10px 20px; font-size:11px; color:var(--muted);
+    text-transform:uppercase; letter-spacing:1px; border-bottom:1px solid var(--line);
+    gap: 10px;
+  }
+  .col-headers .r{ text-align:right; }
+
+  .mitra-card{
+    padding: 14px 20px;
+    border-bottom:1px solid var(--line);
+  }
+  .mitra-card:nth-child(even){ background: var(--row-alt); }
+  .mitra-card:last-child{ border-bottom:none; }
+
+  .row-top{
+    display:grid; grid-template-columns: 34px 1.3fr 0.65fr 0.75fr 0.85fr 2fr;
+    align-items:start; gap:10px;
+  }
+  .rank{ color:var(--muted); font-weight:700; font-size:13px; padding-top:2px; }
+  .rank.top{ color:var(--good); }
+  .name{ font-weight:600; font-size:14px; padding-top:2px; }
+  .station-sub{ font-weight:400; font-size:11px; color:var(--muted); margin-top:3px; }
+  .wo{ text-align:right; font-weight:700; color:var(--open); font-size:16px; }
+  .over{ text-align:right; font-weight:700; font-size:14px; padding-top:2px; color:var(--muted); }
+  .over.has-over{ color:#f87171; }
+  .sla{ text-align:right; color:var(--text); font-size:13px; padding-top:2px; }
+  .sla.empty{ color:var(--muted); font-style:italic; font-size:12px; }
+
+  .ids-chip-list{ display:flex; flex-wrap:wrap; gap:6px; }
+  .chip{
+    background: var(--chip-bg); border:1px solid var(--chip-border);
+    color: var(--accent); font-size:11px; font-weight:600;
+    padding: 3px 8px; border-radius:6px; white-space:nowrap;
+  }
+  .toggle-ids{
+    margin-top:6px; background:none; border:none; color:var(--accent);
+    font-size:11px; cursor:pointer; padding:0; text-decoration:underline;
+  }
+
+  .footnote{ margin-top:14px; font-size:11px; color:var(--muted); line-height:1.6; }
+  .mlabel{ display:none; }
+  .state{ padding: 40px 20px; text-align:center; color:var(--muted); font-size:13px; }
+  .state.error{ color:#f87171; }
+  .retry-btn{
+    margin-top:10px; background:var(--panel-2); color:var(--accent);
+    border:1px solid var(--line); padding:6px 14px; border-radius:8px;
+    font-size:12px; cursor:pointer;
+  }
+
+  @media (max-width: 700px){
+    .topbar{ align-items:center; }
+    .col-headers{ display:none; }
+
+    .row-top{
+      display:flex;
+      flex-wrap:wrap;
+      align-items:flex-start;
+      column-gap:10px;
+      row-gap:10px;
+    }
+    .rank{ flex: 0 0 22px; font-size:12px; }
+    .name{ flex: 1 1 calc(100% - 32px); font-size:14px; }
+
+    .wo, .over{ flex: 1 1 28%; text-align:left; }
+    .sla{ flex: 1 1 44%; text-align:left; }
+
+    .mlabel{
+      display:block;
+      font-size:9px; letter-spacing:0.5px; color:var(--muted);
+      text-transform:uppercase; font-weight:600; margin-bottom:2px;
+    }
+
+    .ids-wrap{ flex: 1 1 100%; margin-top:2px; }
+
+    .hero{ padding: 28px 16px 26px; }
+    .hero .value{ font-size:52px; }
+    .search-box{ width:100%; min-width:0; margin-top:10px; }
+    .panel-head{ flex-wrap:wrap; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <div>
+      <p class="eyebrow">Monitoring WO</p>
+      <h1>WO Open per Mitra</h1>
+    </div>
+    <div class="meta">
+      <button id="refreshBtn" type="button">Refresh sekarang</button>
+    </div>
+  </div>
+
+  <div id="notice" class="notice" hidden></div>
+
+  <div class="hero-search">
+    <div class="search-box hero-search-box">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input type="text" id="heroSearchMitra" placeholder="Cari mitra atau stasiun untuk lihat total WO Open-nya..." list="mitraOptions" autocomplete="off">
+    </div>
+    <datalist id="mitraOptions"></datalist>
+  </div>
+
+  <div class="hero" id="heroBox">
+    <div class="label" id="heroLabel">Total WO Open All</div>
+    <div class="value" id="totalOpenAll">–</div>
+    <div class="sub" id="totalMitra">–</div>
+    <button class="hero-clear" id="heroClearBtn" type="button">← Kembali ke Total Semua Mitra</button>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <h2>Ranking Mitra</h2>
+    </div>
+    <div class="col-headers">
+      <div>#</div>
+      <div>Nama Mitra</div>
+      <div class="r">WO Open</div>
+      <div class="r">Over SLA</div>
+      <div class="r">Rata² SLA</div>
+      <div>ID Pelanggan</div>
+    </div>
+    <div id="tableBody">
+      <div class="state">Memuat data dari spreadsheet…</div>
+    </div>
+  </div>
+
+  <p class="footnote" style="text-align:center; font-size:12px; letter-spacing:1px; text-transform:uppercase; font-weight:700; color:var(--muted);">
+    Dashboard by Vendor Management
+  </p>
+</div>
+
+<script>
+// ===================== KONFIGURASI =====================
+// Sumber CSV dicoba berurutan. Sumber yang terakhir berhasil diingat dan dicoba duluan
+// di kunjungan berikutnya, jadi file besar tidak diunduh dua kali.
+const CSV_SOURCES = [
+  // Sheet yang (semoga) berisi kolom Station Name & Customer ID.
+  "https://docs.google.com/spreadsheets/d/e/2PACX-1vR2jBfzspPE7Rd8ICB5O9MnRKlWbBA03zMW0EP50ZZE1QBKkOqyEPPalrdBtUK6A2RQAbhjICwzEE9i/pub?gid=585283091&single=true&output=csv",
+  // Cadangan: sheet LogWorkOrder6 yang sudah terbukti jalan.
+  "https://docs.google.com/spreadsheets/d/e/2PACX-1vR2jBfzspPE7Rd8ICB5O9MnRKlWbBA03zMW0EP50ZZE1QBKkOqyEPPalrdBtUK6A2RQAbhjICwzEE9i/pub?gid=452104004&single=true&output=csv"
+];
+const FETCH_TIMEOUT_MS = 30000;          // file CSV bisa besar, beri waktu cukup
+const REFRESH_MS = 5 * 60 * 1000;        // auto-refresh hanya saat tab terlihat
+const CACHE_KEY = 'woOpenPerMitra.cache.v1';
+const SRC_KEY = 'woOpenPerMitra.src.v1';
+const CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+const CHIP_PREVIEW = 6;                  // jumlah ID yang langsung ditampilkan per mitra
+
+// ==== PURE-LOGIC-START (tanpa DOM, bisa diuji terpisah) ====
+const OVER_SLA_HOURS = 24; // WO dianggap "Over SLA" jika usianya lebih dari 24 jam
+
+const OPEN_STATUS_KEYWORDS = [
+  'rescheduled',
+  'sedang dikerjakan',
+  'sudah assign',
+  'sudah distribusi'
+];
+
+function letterToIndex(letters){
+  // A=0, B=1, ..., Z=25, AA=26, AL=37, AN=39, AO=40, dst.
+  let result = 0;
+  const s = letters.toUpperCase();
+  for (let i = 0; i < s.length; i++){
+    result = result * 26 + (s.charCodeAt(i) - 64);
+  }
+  return result - 1;
+}
+
+// Cari kolom lewat nama header; kalau tidak ketemu pakai posisi huruf cadangan.
+function findColumnIndex(headers, keywords, excludeKeywords, fallbackLetter){
+  const lower = headers.map(h => (h || '').toLowerCase().trim());
+  for (const kw of keywords){
+    const idx = lower.findIndex(h =>
+      h.includes(kw) && !(excludeKeywords || []).some(ex => h.includes(ex))
+    );
+    if (idx !== -1) return idx;
+  }
+  return fallbackLetter ? letterToIndex(fallbackLetter) : -1;
+}
+
+function isOpenStatus(status){
+  const s = (status || '').toLowerCase();
+  return OPEN_STATUS_KEYWORDS.some(kw => s.includes(kw));
+}
+
+function parseSheetDate(str){
+  if (!str) return null;
+  const d = new Date(str.trim());
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function extractCustomerId(woNumber){
+  if (!woNumber) return null;
+  const parts = woNumber.trim().split('-');
+  return parts.length > 1 ? parts[parts.length - 1] : woNumber.trim();
+}
+
+function formatDuration(hours){
+  if (hours < 24) return hours.toFixed(1) + ' jam';
+  const days = Math.floor(hours / 24);
+  const remHours = Math.round(hours % 24);
+  return days + ' hari ' + remHours + ' jam';
+}
+
+function escapeHtml(str){
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// Baca baris header saja (kecil), kembalikan posisi awal data.
+function parseHeaderRow(text){
+  const n = text.length;
+  const row = [];
+  let field = '', inQ = false, i = 0;
+  for (; i < n; i++){
+    const c = text.charCodeAt(i);
+    if (inQ){
+      if (c === 34){
+        if (text.charCodeAt(i + 1) === 34){ field += '"'; i++; }
+        else inQ = false;
+      } else field += text[i];
+    } else if (c === 34){ inQ = true; }
+    else if (c === 44){ row.push(field); field = ''; }
+    else if (c === 10){ row.push(field); return { headers: row, next: i + 1 }; }
+    else if (c !== 13){ field += text[i]; }
+  }
+  row.push(field);
+  return { headers: row, next: n };
+}
+
+// Pindai isi CSV sekali jalan dan hanya mengambil kolom yang dibutuhkan.
+// slotOfCol[kolom] = nomor slot di rec (atau -1 jika kolom tidak dipakai).
+// rec dipakai ulang untuk tiap baris, jadi onRecord tidak boleh menyimpan rec.
+function scanCsv(text, start, slotOfCol, nSlots, onRecord){
+  const n = text.length;
+  const nCols = slotOfCol.length;
+  const rec = new Array(nSlots).fill('');
+  let i = start, col = 0;
+  let nl = text.indexOf('\n', i);   // posisi newline berikutnya (di-cache)
+  let cc = text.indexOf(',', i);    // posisi koma berikutnya (di-cache)
+
+  while (i < n){
+    if (nl !== -1 && nl < i) nl = text.indexOf('\n', i);
+    if (cc !== -1 && cc < i) cc = text.indexOf(',', i);
+    const slot = col < nCols ? slotOfCol[col] : -1;
+
+    if (text.charCodeAt(i) === 34){            // field berkutip
+      let j = i + 1, esc = false;
+      for (;;){
+        const q = text.indexOf('"', j);
+        if (q === -1){ j = n; break; }
+        if (text.charCodeAt(q + 1) === 34){ esc = true; j = q + 2; continue; }
+        j = q; break;
+      }
+      if (slot !== -1){
+        const v = text.slice(i + 1, j);
+        rec[slot] = esc ? v.replace(/""/g, '"') : v;
+      }
+      i = j + 1;
+      while (i < n){                            // lewati karakter liar setelah kutip penutup
+        const d = text.charCodeAt(i);
+        if (d === 44 || d === 10 || d === 13) break;
+        i++;
+      }
+    } else {                                    // field biasa
+      const end = (cc !== -1 && (nl === -1 || cc < nl)) ? cc : (nl === -1 ? n : nl);
+      if (slot !== -1){
+        let e = end;
+        if (e > i && text.charCodeAt(e - 1) === 13) e--;
+        rec[slot] = text.slice(i, e);
+      }
+      i = end;
+    }
+
+    const d = text.charCodeAt(i);
+    if (d === 44){ col++; i++; }
+    else {                                      // akhir baris (\n, \r\n) atau akhir file
+      if (d === 13 && text.charCodeAt(i + 1) === 10) i++;
+      i++;
+      onRecord(rec);
+      rec.fill('');
+      col = 0;
+    }
+  }
+}
+
+// Dari teks CSV langsung jadi ringkasan per mitra & per stasiun (tanpa menyimpan seluruh baris).
+function buildStatsFromText(text, now){
+  now = now || new Date();
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+  const { headers, next } = parseHeaderRow(text);
+
+  const idx = {
+    wo:      findColumnIndex(headers, ['wo number', 'nomor wo'], [], 'A'),
+    created: findColumnIndex(headers, ['work order created', 'created at', 'wo terbit', 'tanggal terbit'], [], 'B'),
+    status:  findColumnIndex(headers, ['status category'], [], 'I'),
+    mitra:   findColumnIndex(headers, ['partner name', 'nama mitra', 'mitra'], ['ikr'], 'T'),
+    station: findColumnIndex(headers, ['station name', 'nama stasiun', 'stasiun'], [], null),
+    cust:    findColumnIndex(headers, ['customer id', 'id pelanggan'], [], null)
+  };
+
+  // Satu slot per kolom unik yang dipakai.
+  let maxCol = 0;
+  for (const k in idx) if (idx[k] > maxCol) maxCol = idx[k];
+  const slotOfCol = new Int16Array(maxCol + 1).fill(-1);
+  const slot = {};
+  let nSlots = 0;
+  for (const k in idx){
+    const c = idx[k];
+    if (c < 0){ slot[k] = -1; continue; }
+    if (slotOfCol[c] === -1) slotOfCol[c] = nSlots++;
+    slot[k] = slotOfCol[c];
+  }
+  const sWo = slot.wo, sCreated = slot.created, sStatus = slot.status,
+        sMitra = slot.mitra, sStation = slot.station, sCust = slot.cust;
+
+  const stats = new Map();
+  const stationStats = new Map();
+  let rowCount = 0;
+
+  scanCsv(text, next, slotOfCol, nSlots, rec => {
+    rowCount++;
+    try {
+      const mitra = sMitra === -1 ? '' : rec[sMitra].trim();
+      const statusRaw = sStatus === -1 ? '' : rec[sStatus].trim();
+      if (!mitra || !statusRaw) return;
+      if (!isOpenStatus(statusRaw)) return;
+
+      const station = sStation === -1 ? '' : rec[sStation].trim();
+      const rawCust = sCust === -1 ? '' : rec[sCust].trim();
+      const custId = rawCust || extractCustomerId(sWo === -1 ? '' : rec[sWo]);
+
+      let m = stats.get(mitra);
+      if (!m){ m = { open: 0, slaSum: 0, slaCount: 0, overSla: 0, ids: [], stations: new Set() }; stats.set(mitra, m); }
+      m.open += 1;
+      if (custId) m.ids.push(custId);
+
+      let st = null;
+      if (station){
+        m.stations.add(station);
+        st = stationStats.get(station);
+        if (!st){ st = { open: 0, slaSum: 0, slaCount: 0, overSla: 0, mitras: new Set() }; stationStats.set(station, st); }
+        st.open += 1;
+        st.mitras.add(mitra);
+      }
+
+      const created = sCreated === -1 ? null : parseSheetDate(rec[sCreated]);
+      if (created){
+        const hours = (now - created) / 3600000;
+        if (hours >= 0){
+          m.slaSum += hours; m.slaCount += 1;
+          if (hours > OVER_SLA_HOURS) m.overSla += 1;
+          if (st){
+            st.slaSum += hours; st.slaCount += 1;
+            if (hours > OVER_SLA_HOURS) st.overSla += 1;
+          }
+        }
+      }
+    } catch (e) { /* satu baris rusak tidak boleh menjatuhkan seluruh dashboard */ }
+  });
+
+  const list = [];
+  for (const [mitra, s] of stats){
+    list.push({
+      mitra,
+      open: s.open,
+      overSla: s.overSla,
+      slaAvg: s.slaCount > 0 ? (s.slaSum / s.slaCount) : null,
+      ids: s.ids,
+      stations: Array.from(s.stations)
+    });
+  }
+  list.sort((a, b) => b.open - a.open);
+
+  const stationList = [];
+  for (const [station, s] of stationStats){
+    stationList.push({
+      station,
+      open: s.open,
+      overSla: s.overSla,
+      slaAvg: s.slaCount > 0 ? (s.slaSum / s.slaCount) : null,
+      mitras: Array.from(s.mitras)
+    });
+  }
+  stationList.sort((a, b) => b.open - a.open);
+
+  let totalOpen = 0;
+  for (const x of list) totalOpen += x.open;
+
+  return { list, stationList, totalOpen, rowCount };
+}
+// ==== PURE-LOGIC-END ====
+
+// ===================== AMBIL DATA =====================
+function readStore(key){ try { return localStorage.getItem(key); } catch (e) { return null; } }
+function writeStore(key, val){ try { localStorage.setItem(key, val); } catch (e) { /* abaikan */ } }
+
+async function fetchText(url){
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(url + (url.includes('?') ? '&' : '?') + '_=' + Date.now(), {
+      cache: 'no-store',
+      signal: controller.signal
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const text = await res.text();
+    if (!text || !text.trim()) throw new Error('Respons kosong');
+    return text;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function orderedSources(){
+  const all = CSV_SOURCES.map((url, i) => ({ url, i }));
+  const last = parseInt(readStore(SRC_KEY), 10);
+  if (last > 0 && last < all.length){
+    const [pick] = all.splice(last, 1);
+    all.unshift(pick);
+  }
+  return all;
+}
+
+async function fetchStatsFromAnySource(){
+  let lastError = null;
+  let best = null; // hasil terbaik walau 0 mitra, sebagai cadangan terakhir
+  for (const { url, i } of orderedSources()){
+    try {
+      const text = await fetchText(url);
+      const result = buildStatsFromText(text);
+      if (result.rowCount === 0){ lastError = new Error('Data dari sumber ini kosong'); continue; }
+      if (result.list.length > 0){
+        writeStore(SRC_KEY, String(i));
+        return result;
+      }
+      if (!best) best = result; // bisa diakses tapi 0 mitra cocok -> coba sumber lain dulu
+    } catch (err){
+      lastError = err;
+    }
+  }
+  if (best) return best;
+  throw lastError || new Error('Semua sumber data gagal diakses');
+}
+
+// ===================== TAMPILAN =====================
+const $ = id => document.getElementById(id);
+const body = $('tableBody');
+const state = { list: [], stationList: [], totalOpen: 0, keys: [], cards: [], loaded: false };
+
+function idChips(ids, all){
+  const shown = all ? ids : ids.slice(0, CHIP_PREVIEW);
+  let html = '';
+  for (const id of shown) html += '<span class="chip">' + escapeHtml(id) + '</span>';
+  return html;
+}
+
+function renderRanking(){
+  const list = state.list;
+  if (list.length === 0){
+    body.innerHTML = '<div class="state">Tidak ada WO berstatus Open saat ini.</div>';
+    state.cards = [];
+    return;
+  }
+  const parts = new Array(list.length);
+  for (let i = 0; i < list.length; i++){
+    const x = list[i];
+    const slaText = x.slaAvg !== null
+      ? formatDuration(x.slaAvg)
+      : '<span class="sla empty">n/a</span>';
+    const overText = x.overSla > 0 ? x.overSla : '–';
+    const overClass = x.overSla > 0 ? 'over has-over' : 'over';
+    const stationPreview = x.stations.length > 3
+      ? x.stations.slice(0, 3).join(', ') + ' +' + (x.stations.length - 3) + ' lainnya'
+      : x.stations.join(', ');
+    parts[i] =
+      '<div class="mitra-card"><div class="row-top">' +
+        '<div class="rank' + (i === 0 ? ' top' : '') + '">' + (i + 1) + '</div>' +
+        '<div class="name">' + escapeHtml(x.mitra) +
+          (stationPreview ? '<div class="station-sub">Stasiun: ' + escapeHtml(stationPreview) + '</div>' : '') +
+        '</div>' +
+        '<div class="wo"><span class="mlabel">WO Open</span>' + x.open + '</div>' +
+        '<div class="' + overClass + '"><span class="mlabel">Over SLA</span>' + overText + '</div>' +
+        '<div class="sla"><span class="mlabel">Rata² SLA</span>' + slaText + '</div>' +
+        '<div class="ids-wrap">' +
+          '<div class="ids-chip-list">' + idChips(x.ids, false) + '</div>' +
+          (x.ids.length > CHIP_PREVIEW
+            ? '<button class="toggle-ids" type="button" data-i="' + i + '">Lihat semua ID (' + x.ids.length + ')</button>'
+            : '') +
+        '</div>' +
+      '</div></div>';
+  }
+  body.innerHTML = parts.join('');
+  state.cards = Array.from(body.children);
+}
+
+function applyData(d){
+  state.list = d.list;
+  state.stationList = d.stationList;
+  state.totalOpen = d.totalOpen;
+  state.keys = d.list.map(x => ({
+    n: x.mitra.toLowerCase(),
+    s: x.stations.join('\u0001').toLowerCase()
+  }));
+
+  let opts = '';
+  for (const x of d.list) opts += '<option value="' + escapeHtml(x.mitra) + '">';
+  for (const x of d.stationList) opts += '<option value="' + escapeHtml(x.station) + '">';
+  $('mitraOptions').innerHTML = opts;
+
+  renderRanking();
+  updateHeroFromSearch();
+}
+
+function filterRankingList(q){
+  const cards = state.cards, keys = state.keys;
+  let visible = 0;
+  for (let i = 0; i < cards.length; i++){
+    const k = keys[i];
+    const match = !q || k.n.includes(q) || k.s.includes(q);
+    cards[i].hidden = !match;
+    if (match) visible++;
+  }
+  const existing = $('noMatchState');
+  if (visible === 0 && cards.length > 0){
+    if (!existing){
+      const el = document.createElement('div');
+      el.id = 'noMatchState';
+      el.className = 'no-match';
+      el.textContent = 'Tidak ada mitra/stasiun yang cocok dengan pencarian.';
+      body.appendChild(el);
+    }
+  } else if (existing){
+    existing.remove();
+  }
+}
+
+function updateHeroFromSearch(){
+  const heroBox = $('heroBox'), heroLabel = $('heroLabel');
+  const totalEl = $('totalOpenAll'), subEl = $('totalMitra');
+  const q = ($('heroSearchMitra').value || '').trim().toLowerCase();
+  const list = state.list, stationList = state.stationList;
+
+  if (!q){
+    heroBox.classList.remove('showing-mitra', 'not-found');
+    heroLabel.textContent = 'Total WO Open All';
+    totalEl.textContent = state.loaded ? state.totalOpen.toLocaleString('id-ID') : '–';
+    subEl.textContent = state.loaded ? list.length + ' mitra memiliki WO Open' : '–';
+    filterRankingList('');
+    return;
+  }
+
+  // 1. nama Mitra: cocok persis dulu, lalu sebagian
+  let match = list.find(x => x.mitra.toLowerCase() === q);
+  if (!match){
+    const partial = list.filter(x => x.mitra.toLowerCase().includes(q));
+    if (partial.length === 1) match = partial[0];
+    else if (partial.length > 1){
+      heroBox.classList.add('showing-mitra');
+      heroBox.classList.remove('not-found');
+      heroLabel.textContent = partial.length + ' mitra cocok, pilih dari saran';
+      totalEl.textContent = partial.reduce((a, x) => a + x.open, 0).toLocaleString('id-ID');
+      subEl.textContent = partial.map(x => x.mitra).join(', ');
+      filterRankingList(q);
+      return;
+    }
+  }
+  if (match){
+    heroBox.classList.add('showing-mitra');
+    heroBox.classList.remove('not-found');
+    heroLabel.textContent = 'Total WO Open — ' + match.mitra;
+    totalEl.textContent = match.open.toLocaleString('id-ID');
+    subEl.textContent = (match.overSla > 0 ? match.overSla + ' WO over SLA · ' : '') +
+      (match.slaAvg !== null ? 'Rata² SLA ' + formatDuration(match.slaAvg) : 'Rata² SLA n/a');
+    filterRankingList(match.mitra.toLowerCase());
+    return;
+  }
+
+  // 2. nama Stasiun
+  let stationMatch = stationList.find(x => x.station.toLowerCase() === q);
+  if (!stationMatch){
+    const partialStation = stationList.filter(x => x.station.toLowerCase().includes(q));
+    if (partialStation.length === 1) stationMatch = partialStation[0];
+    else if (partialStation.length > 1){
+      heroBox.classList.add('showing-mitra');
+      heroBox.classList.remove('not-found');
+      heroLabel.textContent = partialStation.length + ' stasiun cocok, pilih dari saran';
+      totalEl.textContent = partialStation.reduce((a, x) => a + x.open, 0).toLocaleString('id-ID');
+      subEl.textContent = partialStation.map(x => x.station).join(', ');
+      filterRankingList(q);
+      return;
+    }
+  }
+  if (stationMatch){
+    heroBox.classList.add('showing-mitra');
+    heroBox.classList.remove('not-found');
+    heroLabel.textContent = 'Total WO Open — Stasiun ' + stationMatch.station;
+    totalEl.textContent = stationMatch.open.toLocaleString('id-ID');
+    subEl.textContent = (stationMatch.overSla > 0 ? stationMatch.overSla + ' WO over SLA · ' : '') +
+      (stationMatch.slaAvg !== null ? 'Rata² SLA ' + formatDuration(stationMatch.slaAvg) + ' · ' : '') +
+      'Mitra: ' + stationMatch.mitras.join(', ');
+    filterRankingList(q);
+    return;
+  }
+
+  // 3. tidak ketemu
+  heroBox.classList.add('showing-mitra', 'not-found');
+  heroLabel.textContent = 'Mitra / Stasiun tidak ditemukan';
+  totalEl.textContent = '–';
+  subEl.textContent = 'Coba kata kunci lain';
+  filterRankingList(q);
+}
+
+function setNotice(msg){
+  const el = $('notice');
+  el.textContent = msg || '';
+  el.hidden = !msg;
+}
+
+// ===================== CACHE (tampil instan, lalu segarkan di belakang) =====================
+function readCache(){
+  try {
+    const raw = readStore(CACHE_KEY);
+    if (!raw) return null;
+    const d = JSON.parse(raw);
+    if (!d || !Array.isArray(d.list) || !Array.isArray(d.stationList)) return null;
+    if (Date.now() - d.t > CACHE_MAX_AGE_MS) return null;
+    return d;
+  } catch (e) { return null; }
+}
+function saveCache(r){
+  writeStore(CACHE_KEY, JSON.stringify({
+    t: Date.now(), list: r.list, stationList: r.stationList, totalOpen: r.totalOpen
+  }));
+}
+
+// ===================== MUAT & REFRESH =====================
+let loading = false;
+let lastAttempt = 0;
+
+async function loadDashboard(){
+  if (loading) return;
+  loading = true;
+  const btn = $('refreshBtn');
+  btn.disabled = true;
+  btn.textContent = 'Memuat…';
+  if (!state.loaded) body.innerHTML = '<div class="state">Memuat data dari spreadsheet…</div>';
+  try {
+    const result = await fetchStatsFromAnySource();
+    state.loaded = true;
+    applyData(result);
+    if (result.list.length > 0) saveCache(result);
+    setNotice('');
+  } catch (err){
+    if (state.loaded){
+      setNotice('Gagal memperbarui data, menampilkan data terakhir.');
+    } else {
+      const isTimeout = err && err.name === 'AbortError';
+      const msg = isTimeout
+        ? 'Koneksi ke spreadsheet terlalu lama (timeout). Periksa koneksi internet, lalu coba lagi.'
+        : 'Gagal memuat data (' + (err && err.message ? err.message : 'tidak diketahui') + '). Pastikan spreadsheet masih dipublish ke web, lalu coba lagi.';
+      body.innerHTML =
+        '<div class="state error">' + escapeHtml(msg) +
+        '<br><button class="retry-btn" type="button">Coba lagi</button></div>';
+    }
+  } finally {
+    loading = false;
+    lastAttempt = Date.now();
+    btn.disabled = false;
+    btn.textContent = 'Refresh sekarang';
+  }
+}
+
+function maybeRefresh(){
+  if (document.visibilityState === 'visible' && Date.now() - lastAttempt >= REFRESH_MS) loadDashboard();
+}
+
+function debounce(fn, ms){
+  let t;
+  return function(){ clearTimeout(t); t = setTimeout(fn, ms); };
+}
+
+// Satu listener untuk semua tombol di daftar (tidak ada listener per baris).
+body.addEventListener('click', e => {
+  const retry = e.target.closest('.retry-btn');
+  if (retry){ loadDashboard(); return; }
+  const btn = e.target.closest('.toggle-ids');
+  if (!btn) return;
+  const ids = state.list[+btn.dataset.i].ids;
+  const listEl = btn.previousElementSibling;
+  const open = btn.dataset.open === '1';
+  listEl.innerHTML = idChips(ids, !open);          // ID lengkap baru dibuat saat diminta
+  btn.dataset.open = open ? '0' : '1';
+  btn.textContent = open ? 'Lihat semua ID (' + ids.length + ')' : 'Sembunyikan ID';
+});
+
+$('refreshBtn').addEventListener('click', loadDashboard);
+$('heroSearchMitra').addEventListener('input', debounce(updateHeroFromSearch, 150));
+$('heroClearBtn').addEventListener('click', () => {
+  $('heroSearchMitra').value = '';
+  updateHeroFromSearch();
+});
+document.addEventListener('visibilitychange', maybeRefresh);
+setInterval(maybeRefresh, 30 * 1000);
+
+// Mulai: tampilkan data terakhir dari cache (jika ada) lalu segarkan.
+const cached = readCache();
+if (cached){
+  state.loaded = true;
+  applyData(cached);
+}
+loadDashboard();
+</script>
+</body>
+</html>
