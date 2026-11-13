@@ -54,6 +54,9 @@
   #refreshBtn:hover{ border-color:var(--accent); }
   #refreshBtn:disabled{ opacity:.6; cursor:default; border-color:var(--line); }
 
+  .last-update{ margin-top:6px; font-size:11px; color:var(--muted); }
+  .last-update .dot{ display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--good); margin-right:5px; vertical-align:1px; }
+  .last-update.stale .dot{ background:var(--open); }
   .notice{ text-align:center; font-size:12px; color:var(--open); margin:-8px 0 14px; }
   .notice[hidden]{ display:none; }
 
@@ -215,6 +218,7 @@
     </div>
     <div class="meta">
       <button id="refreshBtn" type="button">Refresh sekarang</button>
+      <div id="lastUpdate" class="last-update">Auto-refresh tiap 5 menit</div>
     </div>
   </div>
 
@@ -259,6 +263,7 @@
 </div>
 
 <script>
+const SCRIPT_TEXT = document.currentScript ? document.currentScript.textContent : '';
 // ===================== KONFIGURASI =====================
 // Sumber CSV dicoba berurutan. Sumber yang terakhir berhasil diingat dan dicoba duluan
 // di kunjungan berikutnya, jadi file besar tidak diunduh dua kali.
@@ -557,13 +562,47 @@ function orderedSources(){
   return all;
 }
 
+// Unduh & olah CSV di Web Worker (thread terpisah) supaya halaman tidak macet/patah-patah.
+let worker = null, workerSeq = 0;
+const workerJobs = new Map();
+function getWorker(){
+  if (worker !== null) return worker;
+  try {
+    const a = SCRIPT_TEXT.indexOf('// ==== PURE-LOGIC-START'), b = SCRIPT_TEXT.indexOf('// ==== PURE-LOGIC-END');
+    if (a < 0 || b < 0 || typeof Worker === 'undefined') throw new Error('no worker');
+    const src = 'const FETCH_TIMEOUT_MS=' + FETCH_TIMEOUT_MS + ';\n' +
+      SCRIPT_TEXT.slice(a, b) + '\n' + fetchText.toString() + '\n' +
+      'self.onmessage=async e=>{const {id,url}=e.data;try{const t=await fetchText(url);' +
+      'const r=buildStatsFromText(t);self.postMessage({id,ok:true,r});}' +
+      'catch(err){self.postMessage({id,ok:false,name:err&&err.name,msg:err&&err.message});}};';
+    worker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+    worker.onmessage = e => {
+      const job = workerJobs.get(e.data.id);
+      if (!job) return;
+      workerJobs.delete(e.data.id);
+      if (e.data.ok) job.resolve(e.data.r);
+      else { const er = new Error(e.data.msg || 'Gagal'); if (e.data.name) er.name = e.data.name; job.reject(er); }
+    };
+    worker.onerror = () => { worker = false; workerJobs.forEach(j => j.reject(new Error('Worker error'))); workerJobs.clear(); };
+  } catch (e){ worker = false; }
+  return worker;
+}
+async function fetchAndBuild(url){
+  const w = getWorker();
+  if (!w){ return buildStatsFromText(await fetchText(url)); }   // cadangan: proses di halaman
+  return new Promise((resolve, reject) => {
+    const id = ++workerSeq;
+    workerJobs.set(id, { resolve, reject });
+    w.postMessage({ id, url });
+  });
+}
+
 async function fetchStatsFromAnySource(){
   let lastError = null;
   let best = null; // hasil terbaik walau 0 mitra, sebagai cadangan terakhir
   for (const { url, i } of orderedSources()){
     try {
-      const text = await fetchText(url);
-      const result = buildStatsFromText(text);
+      const result = await fetchAndBuild(url);
       if (result.rowCount === 0){ lastError = new Error('Data dari sumber ini kosong'); continue; }
       if (result.list.length > 0){
         writeStore(SRC_KEY, String(i));
@@ -581,7 +620,8 @@ async function fetchStatsFromAnySource(){
 // ===================== TAMPILAN =====================
 const $ = id => document.getElementById(id);
 const body = $('tableBody');
-const state = { list: [], stationList: [], totalOpen: 0, keys: [], cards: [], loaded: false };
+const state = { list: [], stationList: [], totalOpen: 0, keys: [], cards: [], loaded: false,
+  sig: '', opts: '', openIds: new Set(), openSt: new Set(), updatedAt: 0 };
 
 function idChips(x, all){
   const ids = x.ids, over = x.idOver || [];
@@ -593,6 +633,32 @@ function idChips(x, all){
       : '<span class="chip">' + escapeHtml(ids[k]) + '</span>';
   }
   return html;
+}
+
+function stationHtml(x, i, open){
+  if (x.stations.length <= 3) return escapeHtml(x.stations.join(', '));
+  return open
+    ? escapeHtml(x.stations.join(', ')) + ' <button class="more-st" type="button" data-i="' + i + '" data-open="1">sembunyikan</button>'
+    : escapeHtml(x.stations.slice(0, 3).join(', ')) +
+      ' <button class="more-st" type="button" data-i="' + i + '">+' + (x.stations.length - 3) + ' lainnya</button>';
+}
+
+// Tanda tangan data: kalau sama dengan sebelumnya, tabel tidak digambar ulang.
+function dataSignature(list){
+  let s = '';
+  for (const x of list) s += x.mitra + '|' + x.open + '|' + x.overSla + '|' + x.stations.join(',') + '|' + x.ids.join(',') + '|' + (x.idOver || []).join('') + '\n';
+  return s;
+}
+
+// Hanya perbarui kolom Rata² SLA (berubah seiring waktu) tanpa menggambar ulang semua kartu.
+function updateSlaOnly(){
+  const cards = state.cards;
+  for (let i = 0; i < cards.length; i++){
+    const x = state.list[i], el = cards[i].querySelector('.sla');
+    if (!el || !x) continue;
+    el.innerHTML = '<span class="mlabel">Rata² SLA</span>' +
+      (x.slaAvg !== null ? formatDuration(x.slaAvg) : '<span class="sla empty">n/a</span>');
+  }
 }
 
 function renderRanking(){
@@ -610,10 +676,8 @@ function renderRanking(){
       : '<span class="sla empty">n/a</span>';
     const overText = x.overSla > 0 ? x.overSla : '–';
     const overClass = x.overSla > 0 ? 'over has-over' : 'over';
-    const stationPreview = x.stations.length > 3
-      ? escapeHtml(x.stations.slice(0, 3).join(', ')) +
-        ' <button class="more-st" type="button" data-i="' + i + '">+' + (x.stations.length - 3) + ' lainnya</button>'
-      : escapeHtml(x.stations.join(', '));
+    const stationPreview = stationHtml(x, i, state.openSt.has(x.mitra));
+    const idsOpen = state.openIds.has(x.mitra);
     parts[i] =
       '<div class="mitra-card"><div class="row-top">' +
         '<div class="rank' + (i === 0 ? ' top' : '') + '">' + (i + 1) + '</div>' +
@@ -624,9 +688,9 @@ function renderRanking(){
         '<div class="' + overClass + '"><span class="mlabel">Over SLA</span>' + overText + '</div>' +
         '<div class="sla"><span class="mlabel">Rata² SLA</span>' + slaText + '</div>' +
         '<div class="ids-wrap">' +
-          '<div class="ids-chip-list">' + idChips(x, false) + '</div>' +
+          '<div class="ids-chip-list">' + idChips(x, idsOpen) + '</div>' +
           (x.ids.length > CHIP_PREVIEW
-            ? '<button class="toggle-ids" type="button" data-i="' + i + '">Lihat semua ID (' + x.ids.length + ')</button>'
+            ? '<button class="toggle-ids" type="button" data-i="' + i + '"' + (idsOpen ? ' data-open="1">Sembunyikan ID' : '>Lihat semua ID (' + x.ids.length + ')') + '</button>'
             : '') +
         '</div>' +
       '</div></div>';
@@ -647,9 +711,15 @@ function applyData(d){
   let opts = '';
   for (const x of d.list) opts += '<option value="' + escapeHtml(x.mitra) + '">';
   for (const x of d.stationList) opts += '<option value="' + escapeHtml(x.station) + '">';
-  $('mitraOptions').innerHTML = opts;
+  if (opts !== state.opts){ $('mitraOptions').innerHTML = opts; state.opts = opts; }
 
-  renderRanking();
+  const sig = dataSignature(d.list);
+  if (sig === state.sig && state.cards.length){
+    updateSlaOnly();                       // data sama: cukup segarkan angka SLA
+  } else {
+    renderRanking();
+    state.sig = sig;
+  }
   updateHeroFromSearch();
 }
 
@@ -785,16 +855,20 @@ async function loadDashboard(){
   const btn = $('refreshBtn');
   btn.disabled = true;
   btn.textContent = 'Memuat…';
+  if (state.loaded) btn.textContent = 'Memperbarui…';
   if (!state.loaded) body.innerHTML = '<div class="state">Memuat data dari spreadsheet…</div>';
   try {
     const result = await fetchStatsFromAnySource();
     state.loaded = true;
+    state.updatedAt = Date.now();
     applyData(result);
     if (result.list.length > 0) saveCache(result);
     setNotice('');
+    updateStatus(false);
   } catch (err){
     if (state.loaded){
-      setNotice('Gagal memperbarui data, menampilkan data terakhir.');
+      setNotice('Gagal memperbarui data, menampilkan data terakhir. Dicoba lagi otomatis.');
+      updateStatus(true);
     } else {
       const isTimeout = err && err.name === 'AbortError';
       const msg = isTimeout
@@ -809,11 +883,25 @@ async function loadDashboard(){
     lastAttempt = Date.now();
     btn.disabled = false;
     btn.textContent = 'Refresh sekarang';
+    updateStatus();
   }
 }
 
+function updateStatus(stale){
+  const el = $('lastUpdate');
+  if (stale !== undefined) el.classList.toggle('stale', stale);
+  if (!state.updatedAt){ el.innerHTML = '<span class="dot"></span>Auto-refresh tiap 5 menit'; return; }
+  const t = new Date(state.updatedAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+  const left = Math.max(0, Math.ceil((lastAttempt + REFRESH_MS - Date.now()) / 60000));
+  el.innerHTML = '<span class="dot"></span>Update ' + t + ' · refresh otomatis ' +
+    (document.visibilityState === 'visible' ? (left <= 0 ? 'sebentar lagi' : '± ' + left + ' mnt lagi') : 'dijeda');
+}
+
+// Auto-refresh hanya saat tab dibuka/terlihat (tab di belakang tidak menyedot kuota & baterai).
 function maybeRefresh(){
-  if (document.visibilityState === 'visible' && Date.now() - lastAttempt >= REFRESH_MS) loadDashboard();
+  if (document.visibilityState === 'visible' && navigator.onLine !== false &&
+      Date.now() - lastAttempt >= REFRESH_MS) loadDashboard();
+  else updateStatus();
 }
 
 function debounce(fn, ms){
@@ -827,15 +915,10 @@ body.addEventListener('click', e => {
   if (retry){ loadDashboard(); return; }
   const more = e.target.closest('.more-st');
   if (more){
-    const st = state.list[+more.dataset.i].stations;
-    const sub = more.parentElement;
-    if (more.dataset.open === '1'){
-      sub.innerHTML = escapeHtml(st.slice(0, 3).join(', ')) +
-        ' <button class="more-st" type="button" data-i="' + more.dataset.i + '">+' + (st.length - 3) + ' lainnya</button>';
-    } else {
-      sub.innerHTML = escapeHtml(st.join(', ')) +
-        ' <button class="more-st" type="button" data-i="' + more.dataset.i + '" data-open="1">sembunyikan</button>';
-    }
+    const x = state.list[+more.dataset.i];
+    const willOpen = more.dataset.open !== '1';
+    if (willOpen) state.openSt.add(x.mitra); else state.openSt.delete(x.mitra);
+    more.parentElement.innerHTML = stationHtml(x, +more.dataset.i, willOpen);
     return;
   }
   const btn = e.target.closest('.toggle-ids');
@@ -846,6 +929,7 @@ body.addEventListener('click', e => {
   const open = btn.dataset.open === '1';
   listEl.innerHTML = idChips(x, !open);          // ID lengkap baru dibuat saat diminta
   btn.dataset.open = open ? '0' : '1';
+  if (open) state.openIds.delete(x.mitra); else state.openIds.add(x.mitra);
   btn.textContent = open ? 'Lihat semua ID (' + ids.length + ')' : 'Sembunyikan ID';
 });
 
@@ -856,13 +940,16 @@ $('heroClearBtn').addEventListener('click', () => {
   updateHeroFromSearch();
 });
 document.addEventListener('visibilitychange', maybeRefresh);
-setInterval(maybeRefresh, 30 * 1000);
+window.addEventListener('online', () => { lastAttempt = 0; maybeRefresh(); });
+setInterval(maybeRefresh, 20 * 1000);
 
 // Mulai: tampilkan data terakhir dari cache (jika ada) lalu segarkan.
 const cached = readCache();
 if (cached){
   state.loaded = true;
+  state.updatedAt = cached.t;
   applyData(cached);
+  updateStatus(false);
 }
 loadDashboard();
 </script>
