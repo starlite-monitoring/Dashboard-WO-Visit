@@ -150,9 +150,14 @@
     color: var(--accent); font-size:11px; font-weight:600;
     padding: 3px 8px; border-radius:6px; white-space:nowrap;
   }
-  .chip.over-sla{
-    background: rgba(248,113,113,.14); border-color: rgba(248,113,113,.55); color:#f87171;
+  .chip.over-sla{ color:#f87171; }
+  .more-st{
+    background:none; border:none; padding:0; margin:0; font:inherit; font-size:11px;
+    color:var(--accent); cursor:pointer; text-decoration:underline;
   }
+  .sla-note{ font-size:11px; color:var(--muted); text-align:right; }
+  .sla-note b{ color:var(--text); }
+  .sla-note .red{ color:#f87171; font-weight:700; }
   .toggle-ids{
     margin-top:6px; background:none; border:none; color:var(--accent);
     font-size:11px; cursor:pointer; padding:0; text-decoration:underline;
@@ -233,6 +238,7 @@
   <div class="panel">
     <div class="panel-head">
       <h2>Ranking Mitra</h2>
+      <div class="sla-note">SLA WO Visit: <b>28 jam</b> (dari WO terbit sampai close) · ID <span class="red">merah</span> = Over SLA</div>
     </div>
     <div class="col-headers">
       <div>#</div>
@@ -270,7 +276,7 @@ const CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 const CHIP_PREVIEW = 6;                  // jumlah ID yang langsung ditampilkan per mitra
 
 // ==== PURE-LOGIC-START (tanpa DOM, bisa diuji terpisah) ====
-const OVER_SLA_HOURS = 24; // WO dianggap "Over SLA" jika usianya lebih dari 24 jam
+const OVER_SLA_HOURS = 28; // SLA WO Visit: dari WO terbit sampai close maksimal 28 jam
 
 const OPEN_STATUS_KEYWORDS = [
   'rescheduled',
@@ -605,13 +611,14 @@ function renderRanking(){
     const overText = x.overSla > 0 ? x.overSla : '–';
     const overClass = x.overSla > 0 ? 'over has-over' : 'over';
     const stationPreview = x.stations.length > 3
-      ? x.stations.slice(0, 3).join(', ') + ' +' + (x.stations.length - 3) + ' lainnya'
-      : x.stations.join(', ');
+      ? escapeHtml(x.stations.slice(0, 3).join(', ')) +
+        ' <button class="more-st" type="button" data-i="' + i + '">+' + (x.stations.length - 3) + ' lainnya</button>'
+      : escapeHtml(x.stations.join(', '));
     parts[i] =
       '<div class="mitra-card"><div class="row-top">' +
         '<div class="rank' + (i === 0 ? ' top' : '') + '">' + (i + 1) + '</div>' +
         '<div class="name">' + escapeHtml(x.mitra) +
-          (stationPreview ? '<div class="station-sub">' + escapeHtml(stationPreview) + '</div>' : '') +
+          (stationPreview ? '<div class="station-sub">' + stationPreview + '</div>' : '') +
         '</div>' +
         '<div class="wo"><span class="mlabel">WO Open</span>' + x.open + '</div>' +
         '<div class="' + overClass + '"><span class="mlabel">Over SLA</span>' + overText + '</div>' +
@@ -818,6 +825,19 @@ function debounce(fn, ms){
 body.addEventListener('click', e => {
   const retry = e.target.closest('.retry-btn');
   if (retry){ loadDashboard(); return; }
+  const more = e.target.closest('.more-st');
+  if (more){
+    const st = state.list[+more.dataset.i].stations;
+    const sub = more.parentElement;
+    if (more.dataset.open === '1'){
+      sub.innerHTML = escapeHtml(st.slice(0, 3).join(', ')) +
+        ' <button class="more-st" type="button" data-i="' + more.dataset.i + '">+' + (st.length - 3) + ' lainnya</button>';
+    } else {
+      sub.innerHTML = escapeHtml(st.join(', ')) +
+        ' <button class="more-st" type="button" data-i="' + more.dataset.i + '" data-open="1">sembunyikan</button>';
+    }
+    return;
+  }
   const btn = e.target.closest('.toggle-ids');
   if (!btn) return;
   const x = state.list[+btn.dataset.i];
